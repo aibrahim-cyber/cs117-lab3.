@@ -1,0 +1,110 @@
+section .data
+    msg1    db "Sum of 2 + 5 = ", 0
+    msg2    db "Product of 6 * 9 = ", 0
+    newline db 10, 0
+
+section .bss
+    buf resb 32          ; buffer for integer -> string (null-terminated)
+
+section .text
+    global _start
+
+; --------------------------
+; print_string
+; input: rsi = pointer to a null-terminated string
+; clobbers: rax, rcx, r11
+; --------------------------
+print_string:
+    xor rcx, rcx
+.find_len:
+    mov al, [rsi + rcx]
+    cmp al, 0
+    je .do_write
+    inc rcx
+    jmp .find_len
+.do_write:
+    mov rax, 1      ; syscall: write
+    mov rdi, 1      ; stdout
+    mov rdx, rcx    ; length
+    syscall
+    ret
+
+; --------------------------
+; print_uint
+; input: rax = unsigned integer to print
+; uses buf (bss)
+; --------------------------
+print_uint:
+    push rbx
+    push rcx
+    push rdx
+
+    ; special-case zero
+    test rax, rax
+    jnz .convert
+    mov byte [rel buf], '0'
+    mov rsi, buf
+    mov rdx, 1
+    jmp .do_print
+
+.convert:
+    ; prepare pointer at end of buffer
+    lea rdi, [rel buf + 31]
+    mov byte [rdi], 0       ; null-terminate (not strictly required)
+    xor rcx, rcx            ; digit count
+
+.loop_div:
+    xor rdx, rdx
+    mov rbx, 10
+    div rbx                 ; rax = rax / 10, remainder in rdx
+    add dl, '0'
+    dec rdi
+    mov [rdi], dl
+    inc rcx
+    test rax, rax
+    jnz .loop_div
+
+    mov rsi, rdi
+    mov rdx, rcx
+
+.do_print:
+    mov rax, 1      ; syscall: write
+    mov rdi, 1      ; stdout
+    syscall
+
+    pop rdx
+    pop rcx
+    pop rbx
+    ret
+
+; --------------------------
+; program entry
+; --------------------------
+_start:
+    ; --- Sum 2 + 5 ---
+    lea rsi, [rel msg1]
+    call print_string
+
+    mov rax, 2
+    add rax, 5
+    call print_uint
+
+    lea rsi, [rel newline]
+    call print_string
+
+    ; --- Product 6 * 9 ---
+    lea rsi, [rel msg2]
+    call print_string
+
+    mov rax, 6
+    mov rbx, 9
+    mul rbx         ; unsigned multiply: result in rdx:rax (we use rax)
+    call print_uint
+
+    lea rsi, [rel newline]
+    call print_string
+
+    ; exit(0)
+    mov rax, 60     ; syscall: exit
+    xor rdi, rdi
+    syscall
